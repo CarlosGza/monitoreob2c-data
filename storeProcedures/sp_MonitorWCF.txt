@@ -1,0 +1,6 @@
+select a.IdCliente,b.Cliente,a.IdUsuario,c.Usuario,min(Fecha) as FechaWCF,count(*) as Pendientes ,
+isnull(convert(varchar(10),(getdate()-min(Fecha)),108),'00:00:00') as [Delay]
+from SMSCargas.dbo.SMSregistrosWCFDetalle a with(nolock),smscargas.dbo.SMSClientes b with(nolock),SMSCargas.dbo.SMSUsuarios c with(nolock)
+where Fecha>convert(varchar(10),getdate(),112) and a.Migrado=0 and a.IdCliente=b.IdCliente and a.IdUsuario=c.IdUsuario
+group by a.IdCliente,b.Cliente,a.IdUsuario,c.usuario
+order by [Delay] desc

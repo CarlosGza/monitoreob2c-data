@@ -1,0 +1,30 @@
+select distinct IdUsuario into #UsuariosHoy from SMSCargas.dbo.SMSEnvioPr with(nolock) where FechaCreacion>=convert(varchar(10),getdate(),112)
+
+select US.IdUsuario,US.Usuario,US.IdCliente,CLI.Cliente,case when US.DosVias = 1 then 'SI' else 'NO' end as DosVias
+		,case when US.esExclusivo = 1 then 'SI' else 'NO' end as Exclusivo
+		,ISNULL(MA.Mascara,'-') as Mascara
+		,US.LimiteSMS
+		,US.LimiteMMS
+		,US.LimiteBlaster
+		,US.LimiteUSSD
+		,US.LimiteRCS
+		,case when US.LimiteSMS <= isnull(US.LimiteSaldoBajo,0)
+			or (US.Multimedia=1 and US.LimiteMMS <= isnull(US.LimiteSaldoBajo,0)) 
+			or (US.PermisoBlaster=1 and US.LimiteBlaster <= isnull(US.LimiteSaldoBajo,0)) 
+			or (US.PermisoUSSD=1 and US.LimiteUSSD <= isnull(US.LimiteSaldoBajo,0))
+			or (US.PermisoRCS=1 and US.LimiteRCS <= isnull(US.LimiteSaldoBajo,0)) then 'Saldo Bajo'
+			when US.esExclusivo = 1 and US.DosVias = 1 and (CAR.PExTelcel2 = 0 or CAR.PExMovistar2 = 0 or CAR.PExATT2 = 0 or CAR.PExOtras2 = 0) then 'Falta Ruta 2 Vias'
+			when US.HoraIni is null or US.HoraFin is null or  US.HoraIni>US.HoraFin then 'Horario Invalido'
+			when isnull(RL.IdLadaPais,0) <> 1 then 'Lada Destino Invalida'
+			else '' end as Problema
+from SMSCargas.dbo.SMSUsuarios US with(nolock)
+left join SMSCargas.dbo.SMSClientes CLI with(nolock) on US.IdCliente = CLI.IdCliente
+left join SMSCargas.dbo.SMSRelacionCarriersUsuarios CAR with(nolock) on US.IdUsuario = CAR.IdUsuario
+inner join #UsuariosHoy UH on US.IdUsuario = UH.IdUsuario
+left join (select IdUsuario,IdLadaPais from SMSCargas.dbo.SMSRelUsuariosLadas with(nolock) where IdLadaPais = 1) RL on US.IdUsuario = RL.IdUsuario
+left join (select IdUsuario,IdEnmascarado from SMSCargas.dbo.SMSRelNumeroEnmascarado with(nolock) where Activo = 1) RM  on US.IdUsuario = RM.IdUsuario
+left join SMSCargas.dbo.SMSNumeroEnmascarado MA with(nolock) on RM.IdEnmascarado = MA.IdEnmascarado
+where US.IsActivo = 1
+order by Problema desc,Cliente asc
+
+drop table #UsuariosHoy

@@ -1,0 +1,56 @@
+select EN.IdEnvioPr,EN.IdCliente,EN.Cliente,EN.Motor_TTS,Resultado,MIN(FechaEnvio) as FechaEnvio,COUNT(*) as Cant into #EnviosBlaster
+from [Blaster].[dbo].[EnviosBlaster] EN WITH(NOLOCK)
+inner join [Blaster].[dbo].[EnvioPrBlaster] PR WITH(NOLOCK) on EN.idenviopr = PR.idenviopr
+where EN.FechaEnvio >= convert(varchar(10),getdate(),112) and PR.Activo=1
+group by EN.IdEnvioPr,EN.IdCliente,EN.Cliente,EN.Motor_TTS,Resultado
+
+
+select Total.IdEnvioPr,CLI.Cliente,Total.Total
+			--,case when PR.IsActivo=1 and RM.FechaEnvio is not null and HO.FechaInicio<RM.FechaEnvio then DATEDIFF(minute,RM.FechaEnvio,getdate()) when PR.IsActivo=1 and RM.FechaEnvio is not null and HO.FechaInicio>RM.FechaEnvio and getdate()>HO.FechaInicio then DATEDIFF(minute,HO.FechaInicio,getdate()) else 0 end as [DelayMigrador]
+			--,case when RE.FechaEnvio is not null then datediff(minute,min(RE.FechaEnvio),getdate()) else 0 end as DelayEtiqueta
+			,isnull(SinProcesar.SinProcesar,0) as SinProcesar
+			,isnull(EnProceso.EnProceso,0) as EnProceso
+			,isnull(Exitosos.Exitosos,0) as Exitosos
+			,isnull(NoExitosos.NoExitosos,0) as NoExitosos
+			,isnull(SinSaldo.SinSaldo,0) as SinSaldo
+			,isnull(Otros.Otros,0) as Otros
+			,CONVERT(VARCHAR(10),isnull(HO.FechaInicio,0),108) as HoraInicio
+			,CONVERT(VARCHAR(10),isnull(HO.FechaFin,0),108) as HoraFin
+			--,case when PR.Activo=1 and SinProcesar.FechaEnvio is not null and HO.FechaInicio<SinProcesar.FechaEnvio then DATEDIFF(minute,SinProcesar.FechaEnvio,getdate()) when PR.Activo=1 and SinProcesar.FechaEnvio is not null and HO.FechaInicio>SinProcesar.FechaEnvio and getdate()>HO.FechaInicio then DATEDIFF(minute,HO.FechaInicio,getdate()) else 0 end as [Delay]
+			,case when PR.Activo=1 and SinProcesar.FechaEnvio is not null and HO.FechaInicio<SinProcesar.FechaEnvio then isnull(convert(varchar(10),(dateadd(second,1,GETDATE()-SinProcesar.FechaEnvio)),108),'00:00:00') when PR.Activo=1 and SinProcesar.FechaEnvio is not null and HO.FechaInicio>SinProcesar.FechaEnvio and getdate()>HO.FechaInicio then isnull(convert(varchar(10),(dateadd(second,1,GETDATE()-HO.FechaInicio)),108),'00:00:00') else '00:00:00' end as [Delay]
+			--,isnull(convert(varchar(10),(dateadd(second,1,GETDATE()-SinProcesar.FechaEnvio)),108),'00:00:00') as [Delay3]
+			,case when PR.Activo = 0 then 'Desactivada' else convert(varchar(max),'') end as Estatus
+			,isnull(AL.Revisado,0) as Revisado
+			into #Blaster
+from (select IdEnviopr,SUM(Cant) as Total from #EnviosBlaster  group by idenviopr) as Total
+left join (select IdEnviopr,FechaEnvio,SUM(Cant) as SinProcesar from #EnviosBlaster where Resultado = 0 group by idenviopr,fechaenvio) as SinProcesar on Total.idenviopr = SinProcesar.idenviopr
+left join (select IdEnviopr,SUM(Cant) as EnProceso from #EnviosBlaster where Resultado = 1 group by idenviopr) as EnProceso on Total.idenviopr = EnProceso.idenviopr
+left join (select IdEnviopr,SUM(Cant) as Exitosos from #EnviosBlaster where Resultado = 2 group by idenviopr) as Exitosos on Total.idenviopr = Exitosos.idenviopr
+left join (select IdEnviopr,SUM(Cant) as NoExitosos from #EnviosBlaster where Resultado = 3 group by idenviopr) as NoExitosos on Total.idenviopr = NoExitosos.idenviopr
+left join (select IdEnviopr,SUM(Cant) as SinSaldo from #EnviosBlaster where Resultado = 6 group by idenviopr) as SinSaldo on Total.idenviopr = SinSaldo.idenviopr
+left join (select IdEnviopr,SUM(Cant) as Otros from #EnviosBlaster where Resultado not in (0,1,2,3,6) group by idenviopr) as Otros on Total.idenviopr = Otros.idenviopr
+left join Blaster.dbo.EnvioPrBlaster PR with(nolock) on Total.IdEnviopr = PR.IdEnviopr
+left join SMSCargas.dbo.SMSClientes CLI with(nolock) on CLI.IdCliente = PR.IdCliente
+left join Blaster.dbo.HorariosBlaster HO with(nolock) on PR.idenviopr = HO.idenviopr
+left join Blaster.dbo.RevisionAlertas AL with(nolock) on PR.idenviopr = AL.idenviopr
+where HO.FechaInicio between convert(varchar(10),getdate(),112) and convert(varchar(10),getdate()+1,112)
+
+
+update #Blaster set Estatus = case when convert(varchar(10),GETDATE(),108) > HoraFin and SinProcesar+EnProceso > 0 then 'Fuera de Horario' 
+				when (convert(varchar(10),GETDATE(),108) between HoraInicio and HoraFin) and (SinProcesar+EnProceso > 0)  then 'Enviando' 
+				when convert(varchar(10),GETDATE(),108)< HoraInicio then 'Aun no Inicia' 
+				--when EsActiva = 'Inactiva' then 'Desactivada'
+				else 'Completada' end
+
+select *
+from #Blaster
+order by Estatus desc,[Delay] desc,HoraInicio asc
+
+select *
+from (select isnull(sum(Exitosos),0) as [Exitosos] from #Blaster with(nolock)) EXI,
+(select isnull(sum(NoExitosos),0) as [NoExitosos] from #Blaster with(nolock)) PRO,
+(select isnull(sum(SinSaldo),0) as [SinSaldo] from #Blaster with(nolock)) SAL
+
+
+drop table #EnviosBlaster
+drop table #Blaster

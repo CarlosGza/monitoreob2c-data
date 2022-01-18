@@ -1,0 +1,50 @@
+
+
+SELECT * 
+INTO #SMS1
+FROM SMSREPORTES.DBO.SMS_IN with(nolock)
+WHERE LEFT(sms_text,3)  IN ('C3N','AUX', 'QUI', 'CON','CIC','INN','PRO') and sent_dt > convert(varchar(10),getdate(),112) and LEN(sms_text) = 21
+order by 1 desc
+
+SELECT * 
+INTO #TMPEnvios
+FROM SMSReportes.DBO.SMSEnvioDetalle with(nolock) WHERE FechaEnvio > convert(varchar(10),getdate(),112) AND Telefono IN (8129486251,8119010601,8120264577) and LEFT(Mensaje,3)  IN ('C3N','AUX', 'QUI', 'CON','CIC','INN','PRO') and LEN(Mensaje) = 21
+AND IdCliente = 4
+
+SELECT IdSMSEnvio, Telefono, 
+    case
+      --when left(Mensaje,3) = 'C3N' then 'C3ntro'
+      when left(Mensaje,6) = 'AUXPLU' then 'AuronixPlus'
+      when left(Mensaje,6) = 'AUXMOO' then 'AuronixMO'
+      when left(Mensaje,6) = 'AUXBAN' then 'AuronixBancos'
+      when left(Mensaje,6) = 'AUXINV' then 'AuronixInvex'
+      when left(Mensaje,6) = 'CICNOR' then 'CICSA'
+      when left(Mensaje,6) = 'CICTRA' then 'CICSATransaccional'
+      when left(Mensaje,6) = 'CICMUZ' then 'CICSAMuñoz'
+      when left(Mensaje,6) = 'CONNOR' then 'Connect'
+      when left(Mensaje,6) = 'INNHTT' then 'InnovattiaHTTP'
+      when left(Mensaje,6) = 'INNBAN' then 'InnovattiaBancos'
+      when left(Mensaje,6) = 'INNNOR' then 'Innovattia'
+      when left(Mensaje,6) = 'PRONOR' then 'Procom'
+      when left(Mensaje,6) = 'PROLAR' then 'ProcomLargo'
+      when left(Mensaje,6) = 'QUINOR' then 'Quiubas'
+    else '' end	as Proveedor,
+    case 
+      when substring(Mensaje,7,3) = 'TEL' then 'Telcel'
+      when substring(Mensaje,7,3) = 'ATT' then 'AT&T'
+      when substring(Mensaje,7,3) = 'MOV' then 'Movistar'
+    else '' end as  Carrier,
+    substring(Mensaje,18,2) + ':' + substring(Mensaje,20,2) as HoraMonitor,
+    Etiqueta, isnull(SENDER_NUMBER,'No Recibido') as TelefonoEmisor, CONVERT(VARCHAR(10),FechaEnvio,108) as HoraEnvio , CONVERT(VARCHAR(10),isnull(sent_dt,0),108)  as HoraRecibido,
+            --isnull(DATEDIFF(Second,FechaEnvio,sent_dt),-1) Diff_Segundos,
+            --isnull(Floor(DATEDIFF(Second,FechaEnvio,sent_dt)/60),-1) Diff_Minutos,
+            --isnull(Floor(DATEDIFF(Second,FechaEnvio,sent_dt)/3600),-1) Diff_Horas,
+      isnull(convert(varchar(10),(dateadd(second,1,isnull(sent_dt,getdate())-FechaEnvio)),108),'00:00:00') as [Delay]
+      --,sent_dt,FechaEnvio
+FROM #TMPEnvios TE
+left JOIN  #SMS1 S1
+ON TE.Mensaje collate SQL_Latin1_General_CP1_CI_AS   = S1.SMS_TEXT collate SQL_Latin1_General_CP1_CI_AS 
+order by HoraMonitor desc,[Delay] desc
+
+drop table #SMS1
+drop table #TMPEnvios

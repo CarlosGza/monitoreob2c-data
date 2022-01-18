@@ -1,0 +1,25 @@
+
+select	a.Cliente,
+		sum(case when b.IdProveedorRCB in (4,6,8,21,22,23,24,28,59,16,18) then 1 else 0 end) as Auronix,
+		sum(case when b.IdProveedorRCB in (20,26,30,31,35,36,37,39,40,41,42,44,45,46,47,54,25,27,33) then 1 else 0 end) as Innovattia,
+		sum(case when b.IdProveedorRCB in (15,49,50,51,52,14) then 1 else 0 end) as C3ntro,
+		sum(case when b.IdProveedorRCB in (32,56,57) then 1 else 0 end) as CICSA,
+		sum(case when b.IdProveedorRCB in (10,58) then 1 else 0 end) as Procom,
+		sum(case when b.IdProveedorRCB in (12,19) then 1 else 0 end) as Quiubas,
+		sum(case when b.IdProveedorRCB in (17) then 1 else 0 end) as [Connect],
+		sum(case when b.IdProveedorRCB in (53) then 1 else 0 end) as Infobip,
+		sum(case when b.IdProveedorRCB in (11) then 1 else 0 end) as Movile,
+		sum(case when b.IdProveedorRCB in (13) then 1 else 0 end) as TeamSourcing,
+		sum(case when b.IdProveedorRCB in (7) then 1 else 0 end) as Iconic,
+		0 as Total
+		into #ClienteProveedor
+from	SMSEnvios.dbo.SMSEnvio a with(nolock), 
+		SMSCargas.dbo.ProveedoresRCB b,SMSCargas.dbo.SMSSIM c 
+where a.FechaEnvio>convert(varchar(10),getdate(),112) and a.Etiqueta=c.Etiqueta and c.IdSMSGrupo=b.IdProveedorRCB and a.Resultado=1
+group by a.cliente
+order by 1
+
+update #ClienteProveedor set Total = Auronix+Innovattia+C3ntro+CICSA+Procom+Quiubas+[Connect]+Infobip+Movile+TeamSourcing+Iconic
+select * from #ClienteProveedor order by Total desc
+
+drop table #ClienteProveedor

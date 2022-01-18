@@ -1,0 +1,105 @@
+CREATE TABLE #MonitorEtiquetas(
+	[ID] [int] IDENTITY(1,1) NOT FOR REPLICATION NOT NULL,
+	[Servicio] [varchar](10) NULL,
+	[Proveedor] [varchar](100),
+	[Etiqueta] [int] NULL,
+	[Exitosos] [int] NULL,
+	[No Exitosos] [int] NULL,
+	[Por Confirmar] [int] NULL,
+	[En cola] [int] NULL,
+	[Tiempo en cola] [varchar](10) NULL
+	)
+CREATE INDEX indx_id ON #MonitorEtiquetas (ID)
+
+select a.*
+into #origen 
+from ( 
+select	'SMS' as Servicio,
+		IdSMSPrevioEnvio as IdPrevioenvio,
+		Etiqueta,
+		Resultado,
+		FechaEnvio 
+from SMSEnvios.dbo.smsenvio with(nolock) 
+where FechaEnvio>convert(varchar(10),getdate(),112) 
+--and idenviopr not in (select IdEnvioPr from smscargas.dbo.SMSEnvioPr with(nolock) where IsActivo=0)
+union all 
+select	'RCS' as Servicio,
+		IdPrevioEnvioRCS,
+		Etiqueta,
+		Resultado,
+		FechaEnvio 
+from RCS.dbo.enviosRCS with(nolock) 
+where FechaEnvio>convert(varchar(10),getdate(),112) 
+--and idenviopr not in (select IdEnvioPr from RCS.dbo.EnvioPrRCS with(nolock) where Activo=0)
+union all 
+select	'USSD' as Servicio,
+		IdPrevioEnvioUSSD,
+		Etiqueta,
+		Resultado,
+		FechaEnvio 
+from USSD.dbo.enviosUSSD with(nolock) 
+where FechaEnvio>convert(varchar(10),getdate(),112) 
+--and idenviopr not in (select IdEnvioPr from USSD.dbo.EnvioPrUSSD with(nolock) where Activo=0)
+) a
+--select * from #origen where etiqueta<1000
+select distinct etiqueta
+into #etiquetas
+from #origen
+
+insert into #MonitorEtiquetas
+select	null,
+		a.aliasproveedor,
+		b.Etiqueta,
+		null,
+		null,
+		null,
+		null,
+		null 
+		from [SMSCargas].[dbo].[ProveedoresRCB] a with(nolock),
+		[SMSCargas].[dbo].[SMSSIM] b with(nolock),
+		#etiquetas c 
+		where a.IdProveedorRCB=b.idsmsgrupo and b.Etiqueta=c.Etiqueta 
+		order by 2
+
+DECLARE @id int,
+		@etiqueta int,
+		@exitosos int,
+		@noexitosos int,
+		@encola int,
+		@confirmar int,
+		@servicio varchar(10), 
+		@tiempo varchar(10),  
+		@totalentregados int,
+		@totalexitosos int,
+		@totalnoexitosos int,
+		@totalencola int,
+		@totalconfirmar int
+		
+set @id = 1
+set @totalexitosos = 0
+set @totalnoexitosos = 0
+set @totalencola = 0
+
+while @id < (select max(id) from #MonitorEtiquetas) + 1
+begin
+
+	set @etiqueta = (select etiqueta from #MonitorEtiquetas where id=@id)
+	set @servicio = (select top 1 Servicio from #origen where etiqueta=@etiqueta)
+	set @exitosos =  (select count(*) from #origen where etiqueta=@etiqueta and resultado=1)
+	set @noexitosos =  (select count(*) from #origen where etiqueta=@etiqueta and resultado=3)
+	set @encola =  (select count(*) from #origen where etiqueta=@etiqueta and resultado in(0))
+	set @confirmar =  (select count(*) from #origen where etiqueta=@etiqueta and resultado in(2))
+	set @tiempo =  (select isnull(convert(varchar(10),(getdate()-min(fechaenvio)),108),'00:00:00') from #origen where etiqueta=@etiqueta and resultado in(0))
+
+	update #MonitorEtiquetas set Servicio=@servicio,Exitosos=@exitosos,[No Exitosos]=@noexitosos,[Por Confirmar]=@confirmar,[En cola]=@encola,[Tiempo en cola]=@tiempo where Etiqueta=@etiqueta
+	
+	set @id = @id + 1
+end
+
+select Servicio,Proveedor,Etiqueta,Exitosos,[No Exitosos],[Por Confirmar],[En cola],[Tiempo en cola]
+from #MonitorEtiquetas
+order by [Tiempo en cola] desc,[En cola] desc,Servicio asc,[Por Confirmar] desc,Etiqueta asc
+
+drop table #etiquetas
+drop table #MonitorEtiquetas		
+drop table #origen

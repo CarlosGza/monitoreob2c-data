@@ -1,0 +1,6 @@
+select *
+from (select Count(*) as [Exitosos] from SMSEnvios.dbo.SMSEnvio with(nolock) where FechaEnvio>convert(varchar(10),getdate(),112) and Resultado=1) EXI,
+(select Count(*) as [Proveedor] from SMSEnvios.dbo.SMSEnvio with(nolock) where FechaEnvio>convert(varchar(10),getdate(),112) and Resultado=3) PRO,
+(select Count(*) as Invalidos from SMSCargas.dbo.SMSPrevioEnvio with(nolock) where FechaEnvio>convert(varchar(10),getdate(),112) and Resultado=9) INV,
+(select Count(*) as Fijos from SMSCargas.dbo.SMSPrevioEnvio with(nolock) where FechaEnvio>convert(varchar(10),getdate(),112) and Resultado=8) FIJ,
+(select Count(*) as [SinSaldo] from SMSEnvios.dbo.SMSEnvio with(nolock) where FechaEnvio>convert(varchar(10),getdate(),112) and Resultado=6) SAL

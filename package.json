@@ -1,0 +1,16 @@
+{
+  "name": "monitoreob2c-data",
+  "version": "1.0.0",
+  "description": "App to send data to monitoreoAtento on aws",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "JC",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.18.0",
+    "body-parser": "^1.18.3",
+    "mssql": "^4.2.2"
+  }
+}

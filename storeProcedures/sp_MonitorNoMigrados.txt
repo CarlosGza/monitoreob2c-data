@@ -1,0 +1,94 @@
+-- SMS
+select a.IdEnvioPr,a.Cliente,a.Resultado,a.IdLista,a.FechaEnvio,b.FechaInicio,b.FechaFin,c.Segmentacion,a.MensajeLargo into #previoenvioSMS 
+from SMSCargas.dbo.SMSPrevioEnvio a with(nolock)
+left join SMSCargas.dbo.SMSHorarios b with(nolock) on a.IdEnvioPr = b.IdEnvioPr
+left join smscargas.dbo.SMSEnvioPr c with(nolock) on a.IdEnvioPr = c.IdEnvioPr
+left join smscargas.dbo.SMSListas d with(nolock) on a.IdLista = d.IdLista
+where a.Resultado=0 and b.FechaInicio between convert(varchar(10),getdate(),112) and convert(varchar(10),getdate()+1,112) and c.IsActivo = 1 and d.Estatus = 1 and isnull(a.MMultimedia,0)=0
+-- MMS
+select a.IdEnvioPr,a.Cliente,a.Resultado,a.IdLista,a.FechaEnvio,b.FechaInicio,b.FechaFin,c.Segmentacion,a.MensajeLargo into #previoenvioMMS 
+from SMSCargas.dbo.SMSPrevioEnvio a with(nolock)
+left join SMSCargas.dbo.SMSHorarios b with(nolock) on a.IdEnvioPr = b.IdEnvioPr
+left join smscargas.dbo.SMSEnvioPr c with(nolock) on a.IdEnvioPr = c.IdEnvioPr
+left join smscargas.dbo.SMSListas d with(nolock) on a.IdLista = d.IdLista
+where a.Resultado=0 and b.FechaInicio between convert(varchar(10),getdate(),112) and convert(varchar(10),getdate()+1,112) and c.IsActivo = 1 and d.Estatus = 1 and isnull(a.MMultimedia,0)=1
+-- USSD
+select a.IdEnvioPr,a.Cliente,a.Resultado,a.IdListaUSSD,a.FechaCreacion,b.FechaInicio,b.FechaFin,0 as Segmentacion,0 as MensajeLargo into #previoenvioUSSD 
+from USSD.dbo.PrevioEnvioUSSD a with(nolock)
+left join USSD.dbo.HorariosUSSD b with(nolock) on a.IdEnvioPr = b.IdEnvioPr
+left join USSD.dbo.EnvioPrUSSD c with(nolock) on a.IdEnvioPr = c.IdEnvioPr
+left join USSD.dbo.ListasUSSD d with(nolock) on a.IdListaUSSD = d.IdListaUSSD
+where a.Resultado=0 and b.FechaInicio between convert(varchar(10),getdate(),112) and convert(varchar(10),getdate()+1,112) and c.Activo = 1 and d.Estatus = 1
+-- RCS
+select a.IdEnvioPr,a.Cliente,a.Resultado,a.IdListaRCS,a.FechaCreacion,b.FechaInicio,b.FechaFin,0 as Segmentacion,0 as MensajeLargo into #previoenvioRCS 
+from RCS.dbo.PrevioEnvioRCS a with(nolock)
+left join RCS.dbo.HorariosRCS b with(nolock) on a.IdEnvioPr = b.IdEnvioPr
+left join RCS.dbo.EnvioPrRCS c with(nolock) on a.IdEnvioPr = c.IdEnvioPr
+left join RCS.dbo.ListasRCS d with(nolock) on a.IdListaRCS = d.IdListaRCS
+where a.Resultado=0 and b.FechaInicio between convert(varchar(10),getdate(),112) and convert(varchar(10),getdate()+1,112) and c.Activo = 1 and d.Estatus = 1
+
+select	'SMS' as Servicio,
+		PE.idenviopr,
+		cliente,
+		fechainicio,
+		fechafin,
+		count(*) as [Regs Pendientes] ,
+		case when Segmentacion=1 then 'SI' else 'NO' end as Segmentado,
+		case when MensajeLargo=1 then 'SI' else 'NO' end as MLargo,
+		case when GETDATE() > FechaFin then 'Fuera de Horario' when GETDATE() between FechaInicio and FechaFin then 'Migrando' else 'Aun no Inicia' end as Estatus,
+		case when FechaInicio < GETDATE() and FechaInicio<min(FechaEnvio) then isnull(convert(varchar(10),(getdate()-min(FechaEnvio)),108),'00:00:00') when FechaInicio < GETDATE() and FechaInicio>min(FechaEnvio) then isnull(convert(varchar(10),(getdate()-FechaInicio),108),'00:00:00') else '00:00:00' end as [Delay]
+		,isnull(AL.Revisado,0) as Revisado
+from	#previoenvioSMS PE
+left join SMSCargas.dbo.RevisionAlertas AL with(nolock) on PE.IdEnvioPr = AL.IdEnvioPr
+group by PE.idenviopr,cliente,fechainicio,fechafin,Segmentacion,MensajeLargo,AL.Revisado
+Union
+select	'MMS' as Servicio,
+		PE.idenviopr,
+		cliente,
+		fechainicio,
+		fechafin,
+		count(*) as [Regs Pendientes] ,
+		case when Segmentacion=1 then 'SI' else 'NO' end as Segmentado,
+		case when MensajeLargo=1 then 'SI' else 'NO' end as MLargo,
+		case when GETDATE() > FechaFin then 'Fuera de Horario' when GETDATE() between FechaInicio and FechaFin then 'Migrando' else 'Aun no Inicia' end as Estatus,
+		case when FechaInicio < GETDATE() and FechaInicio<min(FechaEnvio) then isnull(convert(varchar(10),(getdate()-min(FechaEnvio)),108),'00:00:00') when FechaInicio < GETDATE() and FechaInicio>min(FechaEnvio) then isnull(convert(varchar(10),(getdate()-FechaInicio),108),'00:00:00') else '00:00:00' end as [Delay]
+		,isnull(AL.Revisado,0) as Revisado
+from	#previoenvioMMS PE
+left join SMSCargas.dbo.RevisionAlertas AL with(nolock) on PE.IdEnvioPr = AL.IdEnvioPr
+group by PE.idenviopr,cliente,fechainicio,fechafin,Segmentacion,MensajeLargo,AL.Revisado
+Union
+select	'USSD' as Servicio,
+		PE.idenviopr,
+		cliente,
+		fechainicio,
+		fechafin,
+		count(*) as [Regs Pendientes] ,
+		case when Segmentacion=1 then 'SI' else 'NO' end as Segmentado,
+		case when MensajeLargo=1 then 'SI' else 'NO' end as MLargo,
+		case when GETDATE() > FechaFin then 'Fuera de Horario' when GETDATE() between FechaInicio and FechaFin then 'Migrando' else 'Aun no Inicia' end as Estatus,
+		case when FechaInicio < GETDATE() and FechaInicio<min(FechaCreacion) then isnull(convert(varchar(10),(getdate()-min(FechaCreacion)),108),'00:00:00') when FechaInicio < GETDATE() and FechaInicio>min(FechaCreacion) then isnull(convert(varchar(10),(getdate()-FechaInicio),108),'00:00:00') else '00:00:00' end as [Delay]
+		,isnull(AL.Revisado,0) as Revisado
+from	#previoenvioUSSD PE
+left join USSD.dbo.RevisionAlertas AL with(nolock) on PE.IdEnvioPr = AL.IdEnvioPr
+group by PE.idenviopr,cliente,fechainicio,fechafin,Segmentacion,MensajeLargo,AL.Revisado
+Union
+select	'RCS' as Servicio,
+		PE.idenviopr,
+		cliente,
+		fechainicio,
+		fechafin,
+		count(*) as [Regs Pendientes] ,
+		case when Segmentacion=1 then 'SI' else 'NO' end as Segmentado,
+		case when MensajeLargo=1 then 'SI' else 'NO' end as MLargo,
+		case when GETDATE() > FechaFin then 'Fuera de Horario' when GETDATE() between FechaInicio and FechaFin then 'Migrando' else 'Aun no Inicia' end as Estatus,
+		case when FechaInicio < GETDATE() and FechaInicio<min(FechaCreacion) then isnull(convert(varchar(10),(getdate()-min(FechaCreacion)),108),'00:00:00') when FechaInicio < GETDATE() and FechaInicio>min(FechaCreacion) then isnull(convert(varchar(10),(getdate()-FechaInicio),108),'00:00:00') else '00:00:00' end as [Delay]
+		,isnull(AL.Revisado,0) as Revisado
+from	#previoenvioRCS PE
+left join RCS.dbo.RevisionAlertas AL with(nolock) on PE.IdEnvioPr = AL.IdEnvioPr
+group by PE.idenviopr,cliente,fechainicio,fechafin,Segmentacion,MensajeLargo,AL.Revisado
+order by  Estatus desc,Servicio,[Delay] desc, FechaInicio asc
+
+drop table #previoenvioSMS
+drop table #previoenvioMMS
+drop table #previoenvioUSSD
+drop table #previoenvioRCS
