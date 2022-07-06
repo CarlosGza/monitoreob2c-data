@@ -3,3 +3,6 @@ alter.txt
 mlargo.js
 query.js
 test.js
+faltantes.txt
+logs/*
+!logs/.gitkeep 

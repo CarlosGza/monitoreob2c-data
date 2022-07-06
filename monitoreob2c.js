@@ -2,11 +2,7 @@ const axios = require('axios')
 const sql = require('mssql')
 const fs = require('fs')
 process.title = 'MonitoreoB2C-data - PID: ' + process.pid
-/*const {
-  performance,
-  PerformanceObserver
-} = require('perf_hooks');
-*/
+let pool
 
 // config server
 const config = {
@@ -49,7 +45,7 @@ async function updateData() {
 	let t0 = new Date()
 	log('Empieza ejecucion..')
 	try {
-		let pool = await sql.connect(config)
+		
 		log('Crea conexion')
 		let spEstatus = fs.readFileSync('./storeProcedures/sp_Estatus.txt', 'utf-8')
 		promises.push(pool.request().query(`${spEstatus}`))
@@ -101,17 +97,28 @@ async function updateData() {
 			EstatusBlaster: results[8].value.recordsets[1][0],
 			MonitorWCF: results[9].value.recordset
 		}
-		
-		 await axios
-		.post('http://localhost:3000/', Data)
+		/*
+		await axios
+		.post('http://monitoreob2c.herokuapp.com/', Data)
 		.then((res) => {
 			//console.log(res.data + ' - Data upload successful')
-			log('Data upload successful')
+			log('Data upload successful HEROKU')
 		})
 		.catch((err) => {
 			//console.log(err)
-			log('Data upload unsuccessful', err)
+			log('Data upload unsuccessful HEROKU', err)
 		}) 
+		*/
+		await axios
+		.post('http://localhost:3000/', Data)
+		.then((res) => {
+			//console.log(res.data + ' - Data upload successful')
+			log('Data upload successful - local')
+		})
+		.catch((err) => {
+			//console.log(err)
+			log('Data upload unsuccessful - local', err)
+		})
             
 	} catch (err) {
 		console.log(err)
@@ -127,7 +134,6 @@ async function updateData() {
 	/*
 		JC: http://172.16.5.65:3000/
 		JC Marcatel: http://10.1.62.64:3000/
-		Marcatel: http://mtelservice1:3000/
 		Heroku: http://monitoreob2c.herokuapp.com/
 		*/
 	//fs.appendFile('test.txt',JSON.stringify(Data),err=>{if(err){console.log(err)}})
@@ -159,5 +165,9 @@ function log(info) {
 	fs.appendFileSync(`./logs/logMonitoreo.${fecha}`, `${hr} | ${info}\r\n`)
 	return
 }
+;(async ()=>{
+	pool = new sql.ConnectionPool(config)
+	await pool.connect()
+	updateData()
+	})()
 
-updateData()

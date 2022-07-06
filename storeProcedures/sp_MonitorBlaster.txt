@@ -1,7 +1,7 @@
 select EN.IdEnvioPr,EN.IdCliente,EN.Cliente,EN.Motor_TTS,Resultado,MIN(FechaEnvio) as FechaEnvio,COUNT(*) as Cant into #EnviosBlaster
 from [Blaster].[dbo].[EnviosBlaster] EN WITH(NOLOCK)
-inner join [Blaster].[dbo].[EnvioPrBlaster] PR WITH(NOLOCK) on EN.idenviopr = PR.idenviopr
-where EN.FechaEnvio >= convert(varchar(10),getdate(),112) and PR.Activo=1
+inner join [Blaster].[dbo].[HorariosBlaster] HO WITH(NOLOCK) on EN.idenviopr = HO.idenviopr
+where HO.FechaInicio between convert(varchar(10),getdate(),112) and convert(varchar(10),getdate()+1,112)-- and PR.Activo=1
 group by EN.IdEnvioPr,EN.IdCliente,EN.Cliente,EN.Motor_TTS,Resultado
 
 
@@ -41,6 +41,7 @@ update #Blaster set Estatus = case when convert(varchar(10),GETDATE(),108) > Hor
 				when convert(varchar(10),GETDATE(),108)< HoraInicio then 'Aun no Inicia' 
 				--when EsActiva = 'Inactiva' then 'Desactivada'
 				else 'Completada' end
+				where Estatus=''
 
 select *
 from #Blaster
