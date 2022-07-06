@@ -4,5 +4,5 @@ mlargo.js
 query.js
 test.js
 faltantes.txt
-logs
+logs/*
 !logs/.gitkeep 
